@@ -1,63 +1,128 @@
+// salesController.js (Corrected)
 import Invoice from "../models/Invoice.js";
 import mongoose from "mongoose";
+import { subDays, subMonths, subYears } from "date-fns";
 
-// Get Sales Data with Transactions
 export const getSalesData = async (req, res) => {
   try {
-    const { range } = req.params;
-    const { startDate, endDate } = req.query;
-
-    let matchCondition = { user: new mongoose.Types.ObjectId(req.user.id) };
-
-    // Apply date filters for custom range
-    if (range === "custom" && startDate && endDate) {
-      matchCondition.createdAt = {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate),
-      };
+    const { range, startDate, endDate } = req.query;
+    
+    // Validate range parameter
+    const validRanges = ['week', 'month', 'year', 'custom'];
+    if (!validRanges.includes(range)) {
+      return res.status(400).json({ message: 'Invalid range parameter' });
     }
 
-    let groupStage = {};
-    if (range === "daily") {
-      groupStage = {
-        _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
-      };
-    } else if (range === "monthly") {
-      groupStage = {
-        _id: { $dateToString: { format: "%Y-%m", date: "$createdAt" } },
-      };
-    } else if (range === "yearly") {
-      groupStage = {
-        _id: { $dateToString: { format: "%Y", date: "$createdAt" } },
-      };
-    } else {
-      return res.status(400).json({ message: "Invalid range" });
+    // Date range calculation
+    let start, end;
+    const now = new Date();
+    
+    switch (range) {
+      case 'week':
+        start = subDays(now, 7);
+        end = now;
+        break;
+      case 'month':
+        start = subMonths(now, 1);
+        end = now;
+        break;
+      case 'year':
+        start = subYears(now, 1);
+        end = now;
+        break;
+      case 'custom':
+        if (!startDate || !endDate) {
+          return res.status(400).json({ message: 'Custom range requires both start and end dates' });
+        }
+        start = new Date(startDate);
+        end = new Date(endDate);
+        break;
+      default:
+        start = subDays(now, 7);
+        end = now;
     }
 
-    const salesData = await Invoice.aggregate([
-      { $match: matchCondition },
+    const matchStage = {
+      user: new mongoose.Types.ObjectId(req.user.id),
+      createdAt: { $gte: start, $lte: end },
+    };
+
+    // Sales pipeline
+    const salesPipeline = [
+      { $match: matchStage },
       {
         $group: {
-          _id: groupStage._id,
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
           totalAmount: { $sum: "$totalAmount" },
           orderCount: { $sum: 1 },
-          transactions: { $push: "$transactions" },
+          transactions: { $push: "$$ROOT" },
         },
       },
       { $sort: { _id: 1 } },
+    ];
+
+    // Metrics pipeline
+    const metricsPipeline = [
+      { $match: matchStage },
+      {
+        $group: {
+          _id: null,
+          totalSales: { $sum: "$totalAmount" },
+          totalOrders: { $sum: 1 },
+          avgOrderValue: { $avg: "$totalAmount" },
+          paymentMethods: {
+            $push: "$paymentMethod"
+          },
+        },
+      },
+      {
+        $project: {
+          totalSales: 1,
+          totalOrders: 1,
+          avgOrderValue: { $round: ["$avgOrderValue", 2] },
+          paymentMethods: {
+            $reduce: {
+              input: "$paymentMethods",
+              initialValue: { cash: 0, online: 0 },
+              in: {
+                cash: {
+                  $cond: [
+                    { $eq: ["$$this", "cash"] },
+                    { $add: ["$$value.cash", 1] },
+                    "$$value.cash"
+                  ]
+                },
+                online: {
+                  $cond: [
+                    { $eq: ["$$this", "online"] },
+                    { $add: ["$$value.online", 1] },
+                    "$$value.online"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    ];
+
+    const [salesData, metricsData] = await Promise.all([
+      Invoice.aggregate(salesPipeline),
+      Invoice.aggregate(metricsPipeline),
     ]);
 
-    res.json(
-      salesData.map((sale) => ({
-        date: sale._id,
-        totalAmount: sale.totalAmount,
-        orderCount: sale.orderCount,
-        transactions: sale.transactions.flat(),
-      }))
-    );
-    console.log("✅ Sales Data Fetched Successfully");
+    res.json({
+      sales: salesData,
+      transactions: salesData.flatMap((d) => d.transactions),
+      metrics: metricsData[0] || {
+        totalSales: 0,
+        totalOrders: 0,
+        avgOrderValue: 0,
+        paymentMethods: { cash: 0, online: 0 },
+      },
+    });
   } catch (error) {
-    console.error("❌ Error fetching sales data:", error.message);
-    res.status(500).json({ message: error.message });
+    console.error("Sales data error:", error);
+    res.status(500).json({ message: "Server error" });
   }
 };

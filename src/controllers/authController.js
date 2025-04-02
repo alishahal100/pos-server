@@ -69,3 +69,72 @@ export const getUser = async (req, res) => {
     res.status(401).json({ message: "Unauthorized" });
   }
 };
+
+
+// Add updateUser and updatePassword controllers
+export const updateUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // Update profile fields
+    user.username = req.body.username || user.username;
+    user.email = req.body.email || user.email;
+    
+    // Update business info
+    user.businessName = req.body.businessName || user.businessName;
+    user.businessAddress = req.body.businessAddress || user.businessAddress;
+    user.businessPhone = req.body.businessPhone || user.businessPhone;
+    
+    // Update receipt settings
+    user.receiptHeader = req.body.receiptHeader || user.receiptHeader;
+    user.receiptFooter = req.body.receiptFooter || user.receiptFooter;
+    
+    // Update GST percentage (new field)
+    if (req.body.gstPercentage !== undefined) {
+      user.gstPercentage = parseFloat(req.body.gstPercentage) || 0;
+    }
+
+    const updatedUser = await user.save();
+    
+    res.json({
+      message: "Profile updated successfully",
+      user: {
+        id: updatedUser._id,
+        username: updatedUser.username,
+        email: updatedUser.email,
+        businessName: updatedUser.businessName,
+        businessAddress: updatedUser.businessAddress,
+        businessPhone: updatedUser.businessPhone,
+        receiptHeader: updatedUser.receiptHeader,
+        receiptFooter: updatedUser.receiptFooter,
+        gstPercentage: updatedUser.gstPercentage
+      }
+    });
+
+  } catch (error) {
+    console.error("Update Error:", error);
+    res.status(500).json({ message: "Update failed" });
+  }
+};
+
+export const updatePassword = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    const { currentPassword, newPassword } = req.body;
+
+    if (!(await user.matchPassword(currentPassword))) {
+      return res.status(401).json({ message: "Current password is incorrect" });
+    }
+
+    user.password = newPassword;
+    await user.save();
+    
+    res.json({ message: "Password updated successfully" });
+
+  } catch (error) {
+    console.error("Password Update Error:", error);
+    res.status(500).json({ message: "Password update failed" });
+  }
+};

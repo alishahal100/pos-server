@@ -1,10 +1,16 @@
+// routes/analyticsRoutes.js
 import express from "express";
-import { getBestSellingProducts, getMonthlySales } from "../controllers/analyticsController.js";
+import { 
+  getSalesAnalytics,
+  getInventoryAnalytics,
+  getSalesGrowth
+} from "../controllers/analyticsController.js";
 import authMiddleware from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 
-router.get("/best-sellers", authMiddleware, getBestSellingProducts);
-router.get("/monthly-sales", authMiddleware, getMonthlySales);
+router.get("/sales", authMiddleware, getSalesAnalytics);
+router.get("/inventory", authMiddleware, getInventoryAnalytics);
+router.get("/growth", authMiddleware, getSalesGrowth);
 
 export default router;
