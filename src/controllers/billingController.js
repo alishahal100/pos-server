@@ -11,16 +11,24 @@ export const createInvoice = async (req, res) => {
     let totalAmount = 0;
 
     // Loop through each product and calculate total amount
-    for (const item of products) {
-      console.log(`🔎 Checking product ID: ${item.product}`);
-      const product = await Product.findById(item.product);
-      if (!product) {
-        console.log("❌ Product not found");
-        return res.status(404).json({ message: "Product not found" });
-      }
+    const updatedProducts = [];
+for (const item of products) {
+  console.log(`🔎 Checking product ID: ${item.product}`);
+  const product = await Product.findById(item.product);
+  if (!product) {
+    console.log("❌ Product not found");
+    return res.status(404).json({ message: "Product not found" });
+  }
 
-      totalAmount += item.quantity * product.price;
-    }
+  updatedProducts.push({
+    product: item.product,  // Keep the ID
+    name: product.name,     // Add the product name
+    quantity: item.quantity,
+    price: product.price,
+  });
+
+  totalAmount += item.quantity * product.price;
+}
 
     console.log(`💰 Total Amount: ${totalAmount}`);
     let changeAmount = 0;
