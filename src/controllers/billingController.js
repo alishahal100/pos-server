@@ -46,12 +46,13 @@ for (const item of products) {
     // Create the invoice
     const invoice = await Invoice.create({
       customerName,
-      products,
+      products: updatedProducts,  // Use updated list with names
       totalAmount,
       paymentMethod,
       cashReceived: paymentMethod === "cash" ? cashReceived : 0,
-     user: req.user.id,
+      user: req.user.id,
     });
+    
 
     console.log("✅ Invoice Created Successfully:", invoice);
     res.status(201).json(invoice);
