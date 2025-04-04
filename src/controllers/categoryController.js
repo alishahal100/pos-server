@@ -4,27 +4,12 @@ import Category from "../models/Category.js";
 export const createCategory = async (req, res) => {
   try {
     const { name } = req.body;
-
-    // Ensure user ID exists in the request
-    if (!req.user || !req.user.id) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-
-    // Create category with associated user ID
-    const category = await Category.create({ 
-      name, 
-      user: req.user.id 
-    });
-
+    const category = await Category.create({ name, user: req.user.id });
     res.status(201).json(category);
   } catch (error) {
-    if (error.code === 11000) {
-      return res.status(400).json({ message: "Category name already exists for this user" });
-    }
     res.status(500).json({ message: error.message });
   }
 };
-
 
 // Get Categories
 export const getCategories = async (req, res) => {

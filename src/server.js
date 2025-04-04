@@ -3,8 +3,11 @@ import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import dotenv from "dotenv";
-import morgan from "morgan"; // Import Morgan for logging
+import morgan from "morgan";
 import connectDB from "./config/db.js";
+import compression from "compression"; // Added for response compression
+
+// Routes
 import authRoutes from "./routes/authRoutes.js";
 import categoryRoutes from "./routes/categoryRoutes.js";
 import productRoutes from "./routes/productRoutes.js";
@@ -17,36 +20,51 @@ dotenv.config();
 
 const app = express();
 
+// 1. FIX THE TRUST PROXY ERROR
+app.set('trust proxy', 1); // Trust first proxy (Render.com's load balancer)
+
+// 2. CONNECT TO DATABASE FIRST
+connectDB();
+
+// 3. OPTIMIZED MIDDLEWARE SETUP
 // Security Middleware
 app.use(helmet());
 app.use(cors({
-  origin: '*', // Allows all origins
-  methods: 'GET,POST,PUT,DELETE,PATCH,OPTIONS',
-  allowedHeaders: 'Content-Type, Authorization'
+  origin: process.env.CORS_ORIGIN || '*', // Better security practice
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
-// Logging middleware
-app.use(morgan("dev")); // Logs requests in a concise format
+// Body Parsers
+app.use(express.json({ limit: '10kb' })); // Limit payload size
+app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
-// Custom Request Logger (if you don’t want to use morgan)
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-  next();
-});
+// Compression middleware (gzip responses)
+app.use(compression());
 
-// Rate Limiting to prevent abuse
-const limiter = rateLimit({
+// 4. IMPROVED LOGGING
+if (process.env.NODE_ENV === 'development') {
+  app.use(morgan('dev'));
+} else {
+  app.use(morgan('combined')); // More detailed logs for production
+}
+
+// 5. OPTIMIZED RATE LIMITING
+const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per window
+  max: 100, // Limit each IP to 100 requests
+  message: 'Too many requests from this IP, please try again later',
+  validate: { trustProxy: true } // Explicitly trust proxy
 });
-app.use(limiter);
 
-// Connect to MongoDB
-connectDB();
+// Apply rate limit to API routes only
+app.use('/api/', apiLimiter);
 
-// Routes
+// 6. ROUTES WITH CACHING HEADERS
+// Health check endpoint
+app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));
+
+// API Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/products", productRoutes);
@@ -55,5 +73,17 @@ app.use("/api/sales", salesRoutes);
 app.use("/api/inventory", inventoryRoutes);
 app.use("/api/analytics", analyticsRouter);
 
+// 7. ERROR HANDLING MIDDLEWARE
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({
+    status: 'error',
+    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong!'
+  });
+});
+
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+app.listen(PORT, () => {
+  console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+});
