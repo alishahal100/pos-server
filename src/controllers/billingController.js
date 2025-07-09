@@ -6,53 +6,51 @@ export const createInvoice = async (req, res) => {
   try {
     console.log("➡️ Create Invoice Request Received:", req.body);
 
-    const { customerName, products, paymentMethod, cashReceived } = req.body;
+    const { customerName, products, paymentMethod, cashReceived, subtotal, gstAmount, total, gstPercentage } = req.body;
 
-    let totalAmount = 0;
-
-    // Loop through each product and calculate total amount
+    // Validate products and fetch product names
     const updatedProducts = [];
-for (const item of products) {
-  console.log(`🔎 Checking product ID: ${item.product}`);
-  const product = await Product.findById(item.product);
-  if (!product) {
-    console.log("❌ Product not found");
-    return res.status(404).json({ message: "Product not found" });
-  }
+    for (const item of products) {
+      console.log(`🔎 Checking product ID: ${item.product}`);
+      const product = await Product.findById(item.product);
+      if (!product) {
+        console.log("❌ Product not found");
+        return res.status(404).json({ message: "Product not found" });
+      }
 
-  updatedProducts.push({
-    product: item.product,  // Keep the ID
-    name: product.name,     // Add the product name
-    quantity: item.quantity,
-    price: product.price,
-  });
+      updatedProducts.push({
+        product: item.product, // Keep the ID
+        name: product.name,    // Add the product name
+        quantity: item.quantity,
+        price: product.price,
+      });
+    }
 
-  totalAmount += item.quantity * product.price;
-}
-
-    console.log(`💰 Total Amount: ${totalAmount}`);
     let changeAmount = 0;
 
     // Handling cash payment
     if (paymentMethod === "cash") {
       console.log(`🧾 Cash received: ${cashReceived}`);
-      if (cashReceived < totalAmount) {
+      if (cashReceived < total) {
         console.log("❌ Insufficient cash received");
         return res.status(400).json({ message: "Insufficient cash received" });
       }
+      changeAmount = cashReceived - total;
       console.log(`💵 Change Amount: ${changeAmount}`);
     }
 
     // Create the invoice
     const invoice = await Invoice.create({
       customerName,
-      products: updatedProducts,  // Use updated list with names
-      totalAmount,
+      products: updatedProducts,
+      subtotal,
+      gstAmount,
+      gstPercentage,
+      totalAmount: total, // ✅ Store the grand total (with GST)
       paymentMethod,
       cashReceived: paymentMethod === "cash" ? cashReceived : 0,
       user: req.user.id,
     });
-    
 
     console.log("✅ Invoice Created Successfully:", invoice);
     res.status(201).json(invoice);
@@ -61,6 +59,7 @@ for (const item of products) {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 // Get All Invoices
 export const getInvoices = async (req, res) => {

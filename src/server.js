@@ -15,7 +15,7 @@ import billingRoutes from "./routes/billingRoutes.js";
 import salesRoutes from "./routes/salesRoutes.js";
 import inventoryRoutes from "./routes/inventoryRoutes.js";
 import analyticsRouter from './routes/analyticsRoutes.js';
-
+import adminRoutes from "./routes/adminRoutes.js";
 dotenv.config();
 
 const app = express();
@@ -72,6 +72,7 @@ app.use("/api/billing", billingRoutes);
 app.use("/api/sales", salesRoutes);
 app.use("/api/inventory", inventoryRoutes);
 app.use("/api/analytics", analyticsRouter);
+app.use("/api/admin", adminRoutes);
 
 // 7. ERROR HANDLING MIDDLEWARE
 app.use((err, req, res, next) => {
