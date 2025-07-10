@@ -61,6 +61,43 @@ export const createInvoice = async (req, res) => {
 };
 
 
+// Sync offline invoices from device
+export const syncOfflineInvoices = async (req, res) => {
+  try {
+    const { sales } = req.body;
+
+    if (!Array.isArray(sales)) {
+      return res.status(400).json({ message: "Invalid sales format" });
+    }
+
+    for (const sale of sales) {
+     const existing = await Invoice.findOne({ localId: sale.id });
+
+      if (existing) continue;
+
+      await Invoice.create({
+      localId: sale.id,
+        customerName: sale.customerName,
+        products: sale.products,
+        subtotal: sale.subtotal,
+        gstAmount: sale.gstAmount,
+        gstPercentage: sale.gstPercentage,
+        totalAmount: sale.total,
+        paymentMethod: sale.paymentMethod,
+        cashReceived: sale.cashReceived || 0,
+        createdAt: sale.createdAt || new Date(),
+        user: req.user.id,
+      });
+    }
+
+    res.json({ success: true, message: "Sales synced successfully" });
+  } catch (err) {
+    console.error("❌ Sync failed:", err.message);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+
 // Get All Invoices
 export const getInvoices = async (req, res) => {
   try {
